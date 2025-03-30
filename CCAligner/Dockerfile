@@ -1,22 +1,22 @@
-FROM --platform=linux/amd64 ubuntu:20.04
+FROM --platform=linux/amd64 ubuntu:20.04 AS build_amd64
 
 WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y flex
-RUN apt-get install -y git python3-pip
-RUN apt-get install -y libboost-all-dev
+RUN apt-get update && \
+    apt-get install -y flex git python3-pip libboost-all-dev
 
 RUN git clone https://github.com/PCWcn/CCAligner.git
 
 WORKDIR /app/CCAligner
 
-RUN chmod +x ./extract
-RUN chmod +x ./parser
-RUN chmod +x ./tokenize
-RUN chmod +x ./detect
-RUN chmod +x ./co1
+RUN chmod +x ./extract ./parser ./tokenize ./detect ./co1
+
+RUN mkdir -p /app/dataset /app/results
 
 COPY my_runner .
+
+ENV LANGUAGE=java
+ENV DATASET_PATH=/app/dataset
 
 CMD bash ./my_runner

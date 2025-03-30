@@ -1,26 +1,26 @@
 #!/bin/bash
 
-# Usage: ./run_ccstokener.sh <dataset_path> <result_folder>
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <dataset_path> <result_folder>"
     exit 1
 fi
 
-DATASET_PATH=$1
-RESULT_FOLDER=$2
+DATASET_PATH=$(realpath "$1")
+RESULT_FOLDER=$(realpath "$2")
 
-mkdir -p "$RESULT_FOLDER/CCSTokener"
+OUTPUT_DIR="$RESULT_FOLDER/CCSTokener"
+mkdir -p "$OUTPUT_DIR"
 
-cd CCStokener
-
-docker run -it \
-  --platform linux/amd64 \
-  -e DATASET_PATH="${DATASET_PATH}" \
-  -e LANGUAGE="java" \
-  -v "$RESULT_FOLDER/CCSTokener":/app/CCStokener/ccstokener/results \
+docker run -d -it --quiet \
+  --platform darwin/amd64 \
+  -v "$DATASET_PATH:/data/input:ro" \
   --name ccstokener-runner-container \
-  ccstokener-runner
+  ccstokener-runner >/dev/null
 
-docker wait ccstokener-runner-container
+docker wait ccstokener-runner-container  >/dev/null
 
-docker rm ccstokener-runner-container
+docker cp ccstokener-runner-container:/app/CCStokener/ccstokener/results/. "$OUTPUT_DIR"  >/dev/null
+
+docker rm -f ccstokener-runner-container >/dev/null
+
+echo "Results saved to: $OUTPUT_DIR"

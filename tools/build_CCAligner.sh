@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd CCAligner
-docker build -t ccaligner-detector .
+docker build --platform=amd64 -t ccaligner-detector .

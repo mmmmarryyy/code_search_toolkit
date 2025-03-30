@@ -1,26 +1,27 @@
 #!/bin/bash
 
-# Usage: ./run_ccaligner.sh <dataset_path> <result_folder>
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <dataset_path> <result_folder>"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <dataset_path> <result_folder> <language>"
     exit 1
 fi
 
-DATASET_PATH=$1
-RESULT_FOLDER=$2
+DATASET_PATH=$(realpath "$1")
+RESULT_FOLDER=$(realpath "$2")
+LANGUAGE="$3"
 
-# creatind folder for results
-mkdir -p "$RESULT_FOLDER/CCAligner"
-
-cd CCAligner
+OUTPUT_DIR="$RESULT_FOLDER/CCAligner"
+mkdir -p "$OUTPUT_DIR"
 
 docker run -it \
- --platform linux/amd64 \
- -v "$DATASET_PATH":/app/dataset \
- -v "$RESULT_FOLDER/CCAligner":/app/CCAligner/output/ \
- --name ccaligner-container \
- ccaligner-detector
+  --platform darwin/amd64 \
+  -e LANGUAGE="$LANGUAGE" \
+  -v "$DATASET_PATH:/app/dataset:ro" \
+  -v "$OUTPUT_DIR:/app/results" \
+  --name ccaligner-container \
+  ccaligner-detector >/dev/null
 
-docker wait ccaligner-container
+docker wait ccaligner-container >/dev/null
+docker cp ccaligner-container:/app/CCAligner/output/. "$OUTPUT_DIR" >/dev/null
+docker rm -f ccaligner-container >/dev/null
 
-docker rm ccaligner-container
+echo "Results saved to: $OUTPUT_DIR"

@@ -22,12 +22,12 @@ if __name__ == "__main__":
         shared_task_queue = manager.Queue()
         shared_tasks = manager.dict()
         from app.worker import worker
-        worker_thread = Process(target=worker, args=(shared_task_queue, shared_tasks)) # TODO: check parameter daemon=True and think how to stop it
+        worker_thread = Process(target=worker, args=(shared_task_queue, shared_tasks))
 
         my_process = Process(target=launch_uvicorn, args=(shared_task_queue, shared_tasks))
 
         def signal_handler(sig, frame):
-            my_process.terminate() # TODO: fix terminating process
+            my_process.terminate()
             worker_thread.terminate()
 
         signal.signal(signal.SIGTERM, signal_handler)

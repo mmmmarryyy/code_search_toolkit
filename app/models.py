@@ -9,12 +9,12 @@ class CombinationConfig(BaseModel):
     # strategy: str
     weights: Dict[str, float]
 
-class SearchRequest(BaseModel):
-    mode: str = Field(..., description="Search mode: 'github' or 'local'")
-    repository: str = Field(None, description="GitHub repository URL (required for github mode)")
-    branch: str = Field("master", description="Repository branch, defaults to 'master'")
-    snippet: str = Field(..., description="Code snippet for search")
-    methods: List[MethodConfig]
+# class SearchRequest(BaseModel):
+#     mode: str = Field(..., description="Search mode: 'github' or 'local'")
+#     repository: str = Field(None, description="GitHub repository URL (required for github mode)")
+#     branch: str = Field("master", description="Repository branch, defaults to 'master'")
+#     snippet: str = Field(..., description="Code snippet for search")
+#     methods: List[MethodConfig]
     # combination: CombinationConfig # TODO: add after creating normal aggregation result
 
 class SearchResponse(BaseModel):

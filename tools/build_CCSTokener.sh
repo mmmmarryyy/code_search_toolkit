@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd CCStokener
-docker build -t ccstokener-runner .
+docker build --platform=amd64 -t ccstokener-runner .

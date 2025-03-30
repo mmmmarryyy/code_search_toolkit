@@ -1,8 +1,8 @@
+#!/bin/bash
+
 ulimit -s hard
 
-#! dir of the tool
-# cd /home/wpc/CCAligner/
-
+# Очистка рабочих директорий
 rm -rf input/*
 rm -rf output/*
 # due to large num of files, 'rm -rf token/*' doesn't work
@@ -21,33 +21,13 @@ make clean > /dev/null  # 2> /dev/null
 make > /dev/null  # 2> /dev/null
 cd ..
 
+# Используем переменные окружения
+echo "Using language: $LANGUAGE"
+echo "Processing dataset: $DATASET_PATH"
 
-# start timing
-date
-
-#! parser functions: ./extract 'txl' 'language' 'functions' 'source code' 'output' 'thread num'
-./extract ./txl java functions ./bcb_reduced/2 ./input 8 > /dev/null  # 2> /dev/null
-#if c: ./extract ./txl c .. ; if c#:./extract ./txl cs ..
-
-echo "after extract"
-
-./parser ./input ./ 5 > /dev/null  # 2> /dev/null
-
-echo "after parser"
-
-#tokenize: ./tokenize 'function.file' 'token' 'output' 'thread num'
-./tokenize ./function.file ./token ./ 8 > /dev/null  # 2> /dev/null
-
-echo "after tokenize"
-
-#detect: ./detect 'token files' 'Output' 'function_frag.file' 'window size of token' 'edit-dist' 'similarity'
-./detect ./token ./output ./function.file 6 1 0.6 > /dev/null  # 2> /dev/null
-#or using filter-version by following (more faster):
-#./detect2 ./token ./output ./function.file 6 1 0.6 > /dev/null  # 2> /dev/null
-
-echo "after detect"
-
-./co1 ./output ./ > /dev/null  # 2> /dev/null
-
-# end timing
-date
+# Этап extract с динамическими параметрами
+./extract ./txl "$LANGUAGE" functions "$DATASET_PATH" ./input 8 > /dev/null
+./parser ./input ./ 5 > /dev/null
+./tokenize ./function.file ./token ./ 8 > /dev/null
+./detect ./token ./output ./function.file 6 1 0.6 > /dev/null
+./co1 ./output ./ > /dev/null

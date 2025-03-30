@@ -15,8 +15,11 @@ WORKDIR /app/CCStokener/ccstokener
 RUN chmod +x ./clone-detect/clonedetector
 RUN chmod +x ./clone-detect/cloneverify
 
-# TODO: change this environment parameters
-ENV DATASET_PATH="./bcb_reduced/" 
+RUN mkdir /data
+RUN mkdir /data/input
+
+# Передаем параметры через ENV
+ENV DATASET_PATH="/data/input" 
 ENV LANGUAGE="java"
 
-CMD python runner.py -i $DATASET_PATH -m bcb -l $LANGUAGE
+CMD python runner.py -i $DATASET_PATH -m common -l $LANGUAGE
