@@ -1,18 +1,20 @@
 #!/bin/bash
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <dataset_path> <result_folder>"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <dataset_path> <result_folder> <language>"
     exit 1
 fi
 
 DATASET_PATH=$(realpath "$1")
 RESULT_FOLDER=$(realpath "$2")
+LANGUAGE="$3"
 
 OUTPUT_DIR="$RESULT_FOLDER/CCSTokener"
 mkdir -p "$OUTPUT_DIR"
 
 docker run -d -it --quiet \
   --platform darwin/amd64 \
+  -e LANGUAGE="$LANGUAGE" \
   -v "$DATASET_PATH:/data/input:ro" \
   --name ccstokener-runner-container \
   ccstokener-runner >/dev/null

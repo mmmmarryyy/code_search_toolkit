@@ -13,16 +13,19 @@
 ### GitHub Mode
 
 #### Обязательные параметры
-| Поле         | Тип    | Описание                      |
-|--------------|--------|-------------------------------|
-| `mode`       | string | Должно быть `"github"`        |
-| `repository` | string | URL GitHub репозитория        |
-| `branch`     | string | Название ветки               |
-| `snippet`    | string | Исходный код для поиска       |
-| `methods`    | string | JSON-массив методов           |
-| `combination`| string | JSON-конфиг комбинации        |
+
+| Поле          | Тип    | Описание                                |
+|---------------|--------|-----------------------------------------|
+| `mode`        | string | Должно быть `"github"`                  |
+| `repository`  | string | URL GitHub репозитория                  |
+| `branch`      | string | Название ветки                          |
+| `snippet`     | string | Исходный код для поиска                 |
+| `methods`     | string | JSON-массив методов                     |
+| `combination` | string | JSON-конфиг комбинации                  |
+| `language`    | string | Язык исходного кода (например, `"java"`)|
 
 #### Пример запроса
+
 ```bash
 curl -X POST "http://api.example.com/api/search" \
   -H "Content-Type: multipart/form-data" \
@@ -31,7 +34,8 @@ curl -X POST "http://api.example.com/api/search" \
   -F "branch=main" \
   -F "snippet=def calculate(a, b):\n    return a + b" \
   -F "methods=[{\"name\":\"NIL\",\"params\":{\"threshold\":0.75}}]" \
-  -F "combination={\"strategy\":\"weighted_union\",\"weights\":{\"NIL\":0.6,\"CCAligner\":0.4}}"
+  -F "combination={\"strategy\":\"weighted_union\",\"weights\":{\"NIL\":0.6,\"CCAligner\":0.4}}" \
+  -F "language=python"
 ```
 
 ---
@@ -39,6 +43,7 @@ curl -X POST "http://api.example.com/api/search" \
 ### Local Mode
 
 #### Обязательные параметры
+
 | Поле         | Тип    | Описание                      |
 |--------------|--------|-------------------------------|
 | `mode`       | string | Должно быть `"local"`         |
@@ -46,6 +51,7 @@ curl -X POST "http://api.example.com/api/search" \
 | `snippet`    | string | Исходный код для поиска       |
 | `methods`    | string | JSON-массив методов           |
 | `combination`| string | JSON-конфиг комбинации        |
+| `language`   | string | Язык исходного кода           |
 
 #### Пример запроса
 ```bash
@@ -55,6 +61,7 @@ curl -X POST "http://api.example.com/api/search" \
   -F "snippet=def calculate(a, b):\n    return a + b" \
   -F "methods=[{\"name\":\"NIL\",\"params\":{\"threshold\":0.75}}]" \
   -F "combination={\"strategy\":\"union\"}" \
+  -F "language=python" \
   -F "file=@project.zip"
 ```
 
@@ -85,9 +92,9 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 
 {
-  "status": "pending|processing|completed|failed",
+  "status": "pending|processing|completed|error|deleted",
   "started_at": "2023-12-20T10:00:00Z",
-  "processed_snippet": "def calculate(a, b):\n    return a + b",
+  "processed_snippet": "def calculate(a, b):\n    return a + b"
 }
 ```
 

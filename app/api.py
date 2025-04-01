@@ -1,9 +1,19 @@
 import os
 import json
 import zipfile
+import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Request, Depends, Form, UploadFile, File, status
-from app.models import SearchResponse, StatusResponse, ResultsResponse, MethodsResponse
+from fastapi import APIRouter, HTTPException, Request, Depends, Form, UploadFile, File
+
+from app.models import (
+    SearchResponse,
+    StatusResponse,
+    ResultsResponse,
+    MethodsResponse,
+    LanguageEnum,
+    MethodEnum,
+    TaskStatus,
+)
 from app.utils import clone_repository, generate_task_id
 from app.detection import (
     run_nil_fork,
@@ -17,14 +27,29 @@ router = APIRouter()
 def get_app_state(request: Request):
     return request.app.state
 
+ALLOWED_LANGUAGES_FOR_METHOD = {
+    MethodEnum.NIL_FORK: [LanguageEnum.JAVA, LanguageEnum.CPP, LanguageEnum.PYTHON],
+    MethodEnum.CCALIGNER: [LanguageEnum.JAVA, LanguageEnum.C, LanguageEnum.CSHARP],
+    MethodEnum.CCSTOKENER: [LanguageEnum.JAVA, LanguageEnum.C],
+}
+
+EXT_MAPPING = { # TODO: check language text format for languages that are not java (i mean using them like arguments for methods)
+    LanguageEnum.JAVA: "java",
+    LanguageEnum.CPP: "cpp",
+    LanguageEnum.PYTHON: "py",
+    LanguageEnum.C: "c",
+    LanguageEnum.CSHARP: "cs",
+}
+
 @router.post("/search", response_model=SearchResponse, status_code=201)
-async def create_search_task( # TODO: add default parameters
+async def create_search_task(
     mode: str = Form(...),
     repository: Optional[str] = Form(None),
     branch: Optional[str] = Form(None),
     snippet: str = Form(...),
-    methods: str = Form(...),
-    # combination: str = Form(...),
+    methods: Optional[str] = Form(None),
+    combination: Optional[str] = Form('{"strategy": "intersection_union"}'),
+    language: str = Form(...),
     file: Optional[UploadFile] = File(None),
     state=Depends(get_app_state)
 ):
@@ -33,30 +58,53 @@ async def create_search_task( # TODO: add default parameters
             status_code=400,
             detail="Invalid mode. Supported modes: 'github', 'local'"
         )
-    
+
     try:
-        methods_list = json.loads(methods)
-        # combination_dict = json.loads(combination)
+        lang_enum = LanguageEnum(language.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language. Supported: {[lang.value for lang in LanguageEnum]}"
+        )
+
+    if mode == "github" and repository:
+        branch = branch or "main"
+
+    try:
+        methods_list = json.loads(methods) if methods else [{"name": MethodEnum.NIL_FORK.value}]
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid JSON format: {str(e)}"
+            detail=f"Invalid JSON format for methods: {str(e)}"
         )
-    
-    # TODO: add language validation here (also it should be passed with parameters)
-    # TODO: think it's better to add enum
-    # NIL-fork allowed:
-    #     - "java"
-    #     - "cpp"
-    #     - "py", "python"
-    # CCSTokener allowed:
-    #     - "java"
-    #     - "c"
-    # CCAligner allowed:
-    #     - "java"
-    #     - "c"
-    #     - "c#"
-    
+
+    for m in methods_list:
+        try:
+            method_enum = MethodEnum(m["name"])
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported method: {m.get('name')}. Supported methods: {[m.value for m in MethodEnum]}"
+            )
+        if lang_enum not in ALLOWED_LANGUAGES_FOR_METHOD[method_enum]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Method {method_enum.value} does not support language {lang_enum.value}"
+            )
+
+    try:
+        combination_dict = json.loads(combination)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid JSON format for combination: {str(e)}"
+        )
+    if combination_dict.get("strategy") not in ["intersection_union", "weighted_union"]: # TODO: think about not hardcoding
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported combination strategy. Supported: intersection_union, weighted_union"
+        )
+
     if mode == "github":
         if not repository or not branch:
             raise HTTPException(
@@ -120,36 +168,36 @@ async def create_search_task( # TODO: add default parameters
                 status_code=500,
                 detail=f"Error processing ZIP file: {str(e)}"
             )
-    
-    # Save snippet to file
-    # TODO: Add language detection/parameter
-    snippet_ext = "java"
-    snippet_path = f"snippet.{snippet_ext}"
-    snippet_file = os.path.join(os.getcwd(), dataset_folder, snippet_path)
-    with open(snippet_file, "w", encoding="utf-8") as f:
-        if (len(snippet.split('\n')) == 1):
+
+    snippet_ext = EXT_MAPPING.get(lang_enum, "txt") # TODO: maybe it's better to throw error here
+    snippet_filename = f"snippet.{snippet_ext}"
+    snippet_path = os.path.join(os.getcwd(), dataset_folder, snippet_filename)
+    with open(snippet_path, "w", encoding="utf-8") as f:
+        if len(snippet.split('\n')) == 1:
             for line in snippet.split("\\n"):
                 f.write(line)
                 f.write('\n')
         else:
             f.write(snippet)
-    
+
     task_data = {
-        "status": "pending",
+        "status": TaskStatus.PENDING.value,
         "search_req": {
             "mode": mode,
             "repository": repository,
             "branch": branch,
             "snippet": snippet,
-            "snippet_path": snippet_path,
+            "snippet_path": snippet_filename,
             "methods": methods_list,
-            # "combination": combination_dict
+            "combination": combination_dict,
+            "language": lang_enum.value,
         },
         "result": None,
-        "dataset_path": dataset_folder
+        "dataset_path": dataset_folder,
+        "started_at": None,
+        "expiry": None
     }
     state.tasks[task_id] = task_data
-
     state.task_queue.put(task_id)
     
     return SearchResponse(
@@ -159,9 +207,11 @@ async def create_search_task( # TODO: add default parameters
     )
 
 def process_search_task(task_id: str, tasks: dict):
-    # TODO: wrap into try catch and set error status
+    import datetime
     print(f"DEBUG: inside process_search_task, task_id = {task_id}")
-    # TODO: add here (just not here, but where we call process_search_task) tasks[task_id]["started_at"] = timestamp
+
+    start_time = datetime.datetime.fromisoformat(tasks[task_id]["started_at"])
+
     search_req = tasks[task_id]["search_req"]
     dataset_folder = tasks[task_id]["dataset_path"]
 
@@ -171,52 +221,63 @@ def process_search_task(task_id: str, tasks: dict):
     results = {}
 
     # TODO: should process in parallel
-    for method in search_req["methods"]: # TODO: make search req also a structure or something like that
+    for method in search_req["methods"]:
         name = method["name"]
         params = method.get("params", {})
-        if name.upper() == "NIL-FORK": # TODO: create enum with names of available methods and also make it flexible like NIL/nil/...
-            run_nil_fork(dataset_folder, params, search_req["snippet_path"], results_folder)
-            results["NIL-fork"] = os.path.join(results_folder, "NIL-fork")
-        elif name.upper() == "CCALIGNER":
-            run_ccaligner(dataset_folder, params, results_folder)
-            results["CCAligner"] = os.path.join(results_folder, "CCAligner")
-        elif name.upper() == "CCSTOKENER": 
-            run_ccstokener(dataset_folder, params, results_folder)
-            results["CCSTokener"] = os.path.join(results_folder, "CCSTokener")
+
+        if name.upper() == MethodEnum.NIL_FORK.value.upper():
+            run_nil_fork(
+                dataset_folder,
+                params,
+                search_req["snippet_path"],
+                results_folder,
+                search_req["language"]
+            )
+            results[MethodEnum.NIL_FORK.value] = os.path.join(results_folder, MethodEnum.NIL_FORK.value)
+        elif name.upper() == MethodEnum.CCALIGNER.value.upper():
+            run_ccaligner(
+                dataset_folder,
+                params,
+                results_folder,
+                search_req["language"]
+            )
+            results[MethodEnum.CCALIGNER.value] = os.path.join(results_folder, MethodEnum.CCALIGNER.value)
+        elif name.upper() == MethodEnum.CCSTOKENER.value.upper():
+            run_ccstokener(
+                dataset_folder,
+                params,
+                results_folder,
+                search_req["language"]
+            )
+            results[MethodEnum.CCSTOKENER.value] = os.path.join(results_folder, MethodEnum.CCSTOKENER.value)
         else:
             continue
 
-    '''
-    results = {
-        'CCAligner': 'path/to/CCAligner',
-        'CCSTokener': 'path/to/CCSTokener',
-        'NIL-fork': 'path/to/NIL-fork',
-        'output_root': 'path/to/results'
-    }
+    result_path = combine_results(
+        results,
+        search_req.get("combination", {"strategy": "intersection_union"}),
+        search_req["snippet_path"],
+        results_folder
+    )
 
-    combination = {
-        'strategy': 'weighted_union',
-        'weights': {'CCAligner': 0.5, 'CCSTokener': 0.3, 'NIL-fork': 0.2},
-        'threshold': 0.4,
-        'snippet_path': '/data/dataset/target_file.java'
-    }
+    total_files = 0
+    for _, _, files in os.walk(dataset_folder):
+        total_files += len(files)
+    total_files += 1
 
-    final_path = aggregate_results(results, combination)
-    '''
-    
-    result_path = ""
-    if "combination" in search_req:
-        result_path = combine_results(results, search_req["combination"], search_req["snippet_path"], results_folder)
-    else:
-        result_path = combine_results(results, {"strategy":"intersection_union"}, search_req["snippet_path"], results_folder)
-    
+    execution_time = (datetime.datetime.now() - start_time).total_seconds()
+
     metrics = {
-        "total_files_processed": 42,  # TODO: should calculate number of files in github repo plus 1 for snippet
-        "execution_time": 10.5        # TODO: return difference between tasks[task_id]["started_at"] to this moment
+        "total_files_processed": total_files,
+        "execution_time": execution_time
     }
     
     print(f"DEBUG: results for task_id={task_id} is written to {result_path}")
-    return (result_path, metrics)
+
+    expiry_time = start_time + datetime.timedelta(days=1)
+    tasks[task_id]["expiry"] = expiry_time.isoformat()
+
+    return result_path, metrics, expiry_time
 
 @router.get("/search/{task_id}/status", response_model=StatusResponse)
 async def get_task_status(
@@ -228,8 +289,8 @@ async def get_task_status(
         raise HTTPException(status_code=404, detail="Task not found.")
     return {
         "status": task["status"],
-        "started_at": "",  # TODO: return task["started_at"] if it is setted or otherwise not_started
-        "processed_snippet": task["search_req"]["snippet"] # TODO: add here after moving preprocessing to this code from NIL-fork
+        "started_at": task["started_at"] if task["started_at"] else "not_started",
+        "processed_snippet": task["search_req"]["snippet"]
     }
 
 @router.get("/search/{task_id}/results", response_model=ResultsResponse)
@@ -240,7 +301,7 @@ async def get_task_results(
     task = state.tasks.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
-    if task["status"] != "completed":
+    if task["status"] != TaskStatus.COMPLETED.value:
         raise HTTPException(status_code=400, detail="The task is not yet complete.")
 
     result_path = task["result"]["result_path"]
@@ -256,8 +317,8 @@ async def get_task_results(
 
                 parts = line.split(',')
                 if len(parts) != 6:
-                    continue  # TODO: think about adding warning error like format exception here
-                
+                    continue
+
                 results_content.append({
                     "snippet1": {
                         "file_path": parts[0],
@@ -275,7 +336,6 @@ async def get_task_results(
             "results": results_content,
             "metrics": metrics
         }
-
     except FileNotFoundError:
         raise HTTPException(
             status_code=500,
@@ -291,10 +351,10 @@ async def get_task_results(
 async def get_available_methods():
     available_methods = [
         {
-            "name": "NIL",
+            "name": MethodEnum.NIL_FORK.value,
             "description": "Large-variance clone detection",
             "params": {
-                "threshold": { # TODO: think about default parameters here and check it according to articles
+                "threshold": {
                     "type": "float",
                     "default": 0.7,
                     "min": 0.1,
@@ -303,7 +363,7 @@ async def get_available_methods():
             }
         },
         {
-            "name": "CCAligner",
+            "name": MethodEnum.CCALIGNER.value,
             "description": "Token-based clone detection",
             "params": {
                 "min_tokens": {
@@ -315,7 +375,7 @@ async def get_available_methods():
             }
         },
         {
-            "name": "CCSTokener",
+            "name": MethodEnum.CCSTOKENER.value,
             "description": "Semantic token-based clone detection",
             "params": {
                 "some_param": {
