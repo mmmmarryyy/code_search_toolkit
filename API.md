@@ -14,15 +14,62 @@
 
 #### Обязательные параметры
 
-| Поле          | Тип    | Описание                                |
-|---------------|--------|-----------------------------------------|
-| `mode`        | string | Должно быть `"github"`                  |
-| `repository`  | string | URL GitHub репозитория                  |
-| `branch`      | string | Название ветки                          |
-| `snippet`     | string | Исходный код для поиска                 |
-| `methods`     | string | JSON-массив методов                     |
-| `combination` | string | JSON-конфиг комбинации                  |
-| `language`    | string | Язык исходного кода (например, `"java"`)|
+| Поле          | Тип     | Описание                                                                         |
+|---------------|---------|----------------------------------------------------------------------------------|
+| `mode`        | string  | Должно быть `"github"`                                                           |
+| `repository`  | string  | URL GitHub репозитория                                                           |
+| `branch`      | string  | Название ветки (по умолчанию `"main"`)                                           |
+| `snippet`     | string  | Исходный код (фрагмент) для поиска                                               |
+| `methods`     | string  | JSON-массив методов                                                              |
+| `combination` | string  | JSON-конфигурация стратегии объединения результатов                              |
+| `language`    | string  | Язык исходного кода (например, `"java"`, `"python"`, `"cpp"`, `"c"`, `"csharp"`) |
+
+#### combination: пример
+
+1. Простой union
+
+Объединяет все пары клонов из всех методов без каких-либо фильтров:
+
+```json
+{ "strategy": "union" }
+```
+
+2. threshold_union (пороговое объединение)
+
+Включает только те пары, которые встретились в минимум N разных методах:
+
+```json
+{
+  "strategy": "threshold_union",
+  "min_methods": 2
+}
+```
+
+3. weighted_union (взвешенное объединение)
+
+Каждой паре начисляется сумма весов методов, в которых она встретилась. Оставляем пары, чей суммарный вес $\geq$ threshold.
+
+```json
+{
+  "strategy": "weighted_union",
+  "weights": {
+    "NIL": 0.6,
+    "CCAligner": 0.3,
+    "CCSTokener": 0.1
+  },
+  "threshold": 0.5
+}
+```
+
+threshold — порог (0.0 … 1.0).
+
+4. intersection_union (пересечение)
+
+По умолчанию (если strategy не задана) берётся пересечение результатов всех указанных методов:
+
+```json
+{ "strategy": "intersection_union" }
+```
 
 #### Пример запроса
 
@@ -33,8 +80,8 @@ curl -X POST "http://api.example.com/api/search" \
   -F "repository=https://github.com/user/repo" \
   -F "branch=main" \
   -F "snippet=def calculate(a, b):\n    return a + b" \
-  -F "methods=[{\"name\":\"NIL\",\"params\":{\"threshold\":0.75}}]" \
-  -F "combination={\"strategy\":\"weighted_union\",\"weights\":{\"NIL\":0.6,\"CCAligner\":0.4}}" \
+  -F 'methods=[{"name":"NIL","params":{"threshold":0.75}}]' \
+  -F 'combination={"strategy":"threshold_union","min_methods":2}' \
   -F "language=python"
 ```
 
@@ -59,10 +106,10 @@ curl -X POST "http://api.example.com/api/search" \
   -H "Content-Type: multipart/form-data" \
   -F "mode=local" \
   -F "snippet=def calculate(a, b):\n    return a + b" \
-  -F "methods=[{\"name\":\"NIL\",\"params\":{\"threshold\":0.75}}]" \
-  -F "combination={\"strategy\":\"union\"}" \
+  -F 'methods=[{"name":"NIL","params":{"threshold":0.75}}]' \
+  -F 'combination={"strategy":"union"}' \
   -F "language=python" \
-  -F "file=@project.zip"
+  -F "file=@path/to/project.zip"
 ```
 
 ---
@@ -98,6 +145,14 @@ Content-Type: application/json
 }
 ```
 
+### Status
+
+- pending — ожидает начала обработки
+- processing — сейчас обрабатывается
+- completed — успешно завершена, результаты готовы
+- error — обработка завершилась с ошибкой. При этом могут быть дополнительные поля:
+- deleted — удалена из очереди за истекшим сроком хранения (expiration)
+
 ---
 
 ## 3. Получение результатов
@@ -120,6 +175,8 @@ Content-Type: application/json
   }
 }
 ```
+
+Если статус задачи не completed, возвращается `HTTP 400 Bad Request` с сообщением, что задача ещё не готова.
 
 ---
 
@@ -168,10 +225,14 @@ Content-Type: application/json
 ## Примечания
 
 1. Сложные параметры (`methods`, `combination`) должны:
-   - Быть сериализованы в JSON
-   - Соответствовать схеме из `/api/methods`
+  - Быть сериализованы в JSON
+  - Соответствовать схеме из `/api/methods`
 
 2. Время обработки зависит от:
-   - Размера репозитория (GitHub)
-   - Содержимого архива (Local)
-   - Выбранных методов
+  - Размера репозитория (GitHub)
+  - Содержимого архива (Local)
+  - Выбранных методов
+
+3. Время хранения и удаление
+  - После успешного завершения задача и её результаты хранятся в течение 24 часов.
+  - Как только срок хранения истекает, статус меняется на deleted, и все файлы (распакованные исходники и результаты) удаляются из файловой системы.

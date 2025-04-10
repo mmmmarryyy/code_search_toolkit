@@ -99,11 +99,38 @@ async def create_search_task(
             status_code=400,
             detail=f"Invalid JSON format for combination: {str(e)}"
         )
-    if combination_dict.get("strategy") not in ["intersection_union", "weighted_union"]: # TODO: think about not hardcoding
+
+    supported_strategies = [
+        "intersection_union",
+        "weighted_union",
+        "union",
+        "threshold_union"
+    ]
+
+    strategy = combination_dict.get("strategy")
+    if strategy not in supported_strategies:
         raise HTTPException(
             status_code=400,
-            detail="Unsupported combination strategy. Supported: intersection_union, weighted_union"
+            detail=f"Unsupported combination strategy. Supported: {supported_strategies}"
         )
+
+    if strategy == "weighted_union":
+        if "weights" not in combination_dict or "threshold" not in combination_dict:
+            raise HTTPException(
+                status_code=400,
+                detail="For weighted_union, you must provide 'weights' and 'threshold' in the combination JSON."
+            )
+    if strategy == "threshold_union":
+        if "min_methods" not in combination_dict:
+            raise HTTPException(
+                status_code=400,
+                detail="For threshold_union, you must provide 'min_methods' (integer) in the combination JSON."
+            )
+        if not isinstance(combination_dict["min_methods"], int) or combination_dict["min_methods"] < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="'min_methods' must be a positive integer."
+            )
 
     if mode == "github":
         if not repository or not branch:

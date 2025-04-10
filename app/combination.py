@@ -1,6 +1,6 @@
 import os
 import logging
-from collections import defaultdict
+from collections import defaultdict, Counter
 from app.models import MethodEnum
 
 def combine_results(results, combination, query_file, results_folder):
@@ -26,6 +26,11 @@ def combine_results(results, combination, query_file, results_folder):
                     raise ValueError(f"Weighted union: метод '{method}' отсутствует в результатах или не поддерживается")
             threshold = combination.get('threshold', 0.5)
             final_pairs = weighted_union_strategy(method_results, weights, threshold)
+        elif strategy == 'union':
+            final_pairs = union_strategy(method_results)
+        elif strategy == 'threshold_union':
+            min_methods = combination.get('min_methods', 1)
+            final_pairs = threshold_union_strategy(method_results, min_methods)
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
 
@@ -129,7 +134,7 @@ def read_nil_fork_results(result_dir, query_file):
 
 def intersection_strategy(results):
     common = set.intersection(*[set(clones) for clones in results.values()])
-    return sorted(common)
+    return common
 
 def weighted_union_strategy(results, weights, threshold):
     scores = defaultdict(float)
@@ -144,3 +149,19 @@ def weighted_union_strategy(results, weights, threshold):
         pair for pair, score in scores.items()
         if (score / total_weight) >= threshold
     ]
+
+def union_strategy(results):
+    all_pairs = set()
+    for _, clones in results.items():
+        all_pairs.update(clones)
+    return all_pairs
+
+def threshold_union_strategy(results, min_methods):
+    counter = Counter()
+    for method, clones in results.items():
+        unique_in_this_method = set(clones)
+        for pair in unique_in_this_method:
+            counter[pair] += 1
+
+    selected = [pair for pair, count in counter.items() if count >= min_methods]
+    return selected

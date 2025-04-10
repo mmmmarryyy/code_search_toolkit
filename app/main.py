@@ -22,14 +22,47 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Launch Code Search API")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address")
     parser.add_argument("--port", type=int, default=1234, help="Port number")
+
+    parser.add_argument(
+        "--retry_k",
+        type=int,
+        default=5,
+        help="Base delay (в минутах) перед первой попыткой повтора (default: 10)"
+    )
+    parser.add_argument(
+        "--retry_multiplier",
+        type=int,
+        default=2,
+        help="Множитель c для задержки (delay = retry_k * (retry_multiplier)^(retry_count-1)) (default: 2)"
+    )
+    parser.add_argument(
+        "--max_retries",
+        type=int,
+        default=5,
+        help="Максимальное число попыток (default: 5)"
+    )
+
     args = parser.parse_args()
 
     with Manager() as manager:
         shared_task_queue = manager.Queue()
         shared_tasks = manager.dict()
         from app.worker import worker
-        worker_thread = Process(target=worker, args=(shared_task_queue, shared_tasks))
-        my_process = Process(target=launch_uvicorn, args=(shared_task_queue, shared_tasks, args.host, args.port))
+
+        worker_thread = Process(
+            target=worker,
+            args=(
+                shared_task_queue,
+                shared_tasks,
+                args.retry_k,
+                args.retry_multiplier,
+                args.max_retries
+            )
+        )
+        my_process = Process(
+            target=launch_uvicorn,
+            args=(shared_task_queue, shared_tasks, args.host, args.port)
+        )
 
         def signal_handler(sig, frame):
             my_process.terminate()

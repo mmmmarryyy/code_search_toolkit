@@ -4,8 +4,11 @@ import shutil
 from app.api import process_search_task
 from app.models import TaskStatus
 
-def worker(task_queue, tasks):
-    print("INFO: worker started")
+def worker(task_queue, tasks, retry_k: int, retry_multiplier: int, max_retries: int):
+    print("INFO: worker started, retry_k =", retry_k, 
+          "retry_multiplier =", retry_multiplier, 
+          "max_retries =", max_retries)
+    
     while True:
         now = datetime.datetime.now()
         for tid, task in list(tasks.items()):
@@ -32,7 +35,23 @@ def worker(task_queue, tasks):
         if task_id is None:
             break
 
-        task = tasks[task_id]
+        task = tasks.get(task_id)
+        if not task:
+            continue
+
+        if task["status"] == TaskStatus.ERROR.value and task.get("next_attempt_at"):
+            next_time = datetime.datetime.fromisoformat(task["next_attempt_at"])
+            if now < next_time:
+                task_queue.put(task_id)
+                continue
+            else:
+                task["status"] = TaskStatus.PENDING.value
+                task.pop("next_attempt_at", None)
+                tasks[task_id] = task
+
+        if task["status"] != TaskStatus.PENDING.value:
+            continue
+
         task["started_at"] = datetime.datetime.now().isoformat()
         task["status"] = TaskStatus.PROCESSING.value
         tasks[task_id] = task
@@ -43,15 +62,33 @@ def worker(task_queue, tasks):
             task["status"] = TaskStatus.COMPLETED.value
             task["result"] = {"result_path": result_path, "metrics": metrics}
             task["expiry"] = expiry_time.isoformat()
+
+            task.pop("retry_count", None)
+            task.pop("next_attempt_at", None)
+            tasks[task_id] = task
+
         except Exception as e:
             task = tasks[task_id]
-            task["status"] = TaskStatus.ERROR.value
-            task["error_message"] = str(e)
+            last_retry = task.get("retry_count", 0)
 
-            start_time = datetime.datetime.fromisoformat(task["started_at"])
-            expiry_time = start_time + datetime.timedelta(days=1)
-            task["expiry"] = expiry_time.isoformat()
-        tasks[task_id] = task
+            if last_retry < max_retries:
+                new_retry = last_retry + 1
+                task["retry_count"] = new_retry
+
+                delay_minutes = retry_k * (retry_multiplier ** (new_retry - 1))
+                next_time = now + datetime.timedelta(minutes=delay_minutes)
+                task["next_attempt_at"] = next_time.isoformat()
+
+                task["status"] = TaskStatus.ERROR.value
+                task["error_message"] = str(e)
+                tasks[task_id] = task
+
+                task_queue.put(task_id)
+            else:
+                task["status"] = TaskStatus.ERROR.value
+                task["error_message"] = str(e)
+                task.pop("next_attempt_at", None)
+                tasks[task_id] = task
 
         try:
             task_queue.task_done()
