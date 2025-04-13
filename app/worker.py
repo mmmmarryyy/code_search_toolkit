@@ -4,11 +4,21 @@ import shutil
 from app.api import process_search_task
 from app.models import TaskStatus
 
-def worker(task_queue, tasks, retry_k: int, retry_multiplier: int, max_retries: int):
-    print("INFO: worker started, retry_k =", retry_k, 
-          "retry_multiplier =", retry_multiplier, 
-          "max_retries =", max_retries)
-    
+def worker(
+    task_queue,
+    tasks,
+    retry_k: int,
+    retry_multiplier: int,
+    max_retries: int,
+    max_parallel_methods: int,
+    worker_id: int
+):
+    print("INFO: worker started, retry_k =", retry_k,
+          "retry_multiplier =", retry_multiplier,
+          "max_retries =", max_retries,
+          "max_parallel_methods =", max_parallel_methods,
+          "worker_id =", worker_id)
+
     while True:
         now = datetime.datetime.now()
         for tid, task in list(tasks.items()):
@@ -57,7 +67,7 @@ def worker(task_queue, tasks, retry_k: int, retry_multiplier: int, max_retries: 
         tasks[task_id] = task
 
         try:
-            result_path, metrics, expiry_time = process_search_task(task_id, tasks)
+            result_path, metrics, expiry_time = process_search_task(task_id, tasks, worker_id, max_parallel_methods)
             task = tasks[task_id]
             task["status"] = TaskStatus.COMPLETED.value
             task["result"] = {"result_path": result_path, "metrics": metrics}
@@ -68,11 +78,13 @@ def worker(task_queue, tasks, retry_k: int, retry_multiplier: int, max_retries: 
             tasks[task_id] = task
 
         except Exception as e:
+            print(f"DEBUG: catch error = {e}")
             task = tasks[task_id]
             last_retry = task.get("retry_count", 0)
 
             if last_retry < max_retries:
                 new_retry = last_retry + 1
+                print(f"DEBUG: Error {new_retry} for task = {task_id}")
                 task["retry_count"] = new_retry
 
                 delay_minutes = retry_k * (retry_multiplier ** (new_retry - 1))

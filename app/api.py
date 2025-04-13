@@ -21,6 +21,7 @@ from app.detection import (
     run_ccstokener,
 )
 from app.combination import combine_results
+import concurrent.futures
 
 router = APIRouter()
 
@@ -233,9 +234,15 @@ async def create_search_task(
         results_url=f"/api/search/{task_id}/results"
     )
 
-def process_search_task(task_id: str, tasks: dict):
+
+def process_search_task(
+    task_id: str,
+    tasks: dict,
+    worker_id: int,
+    max_parallel_methods: int
+):
     import datetime
-    print(f"DEBUG: inside process_search_task, task_id = {task_id}")
+    print(f"DEBUG: inside process_search_task, task_id = {task_id}, worker_id = {worker_id}")
 
     start_time = datetime.datetime.fromisoformat(tasks[task_id]["started_at"])
 
@@ -244,11 +251,8 @@ def process_search_task(task_id: str, tasks: dict):
 
     results_folder = os.path.join("results", f"results_{task_id}")
     os.makedirs(results_folder, exist_ok=True)
-    
-    results = {}
 
-    # TODO: should process in parallel
-    for method in search_req["methods"]:
+    def run_method(method: dict):
         name = method["name"]
         params = method.get("params", {})
 
@@ -258,27 +262,50 @@ def process_search_task(task_id: str, tasks: dict):
                 params,
                 search_req["snippet_path"],
                 results_folder,
-                search_req["language"]
+                search_req["language"],
+                worker_id
             )
-            results[MethodEnum.NIL_FORK.value] = os.path.join(results_folder, MethodEnum.NIL_FORK.value)
+            return MethodEnum.NIL_FORK.value, os.path.join(results_folder, MethodEnum.NIL_FORK.value)
+
         elif name.upper() == MethodEnum.CCALIGNER.value.upper():
             run_ccaligner(
                 dataset_folder,
                 params,
                 results_folder,
-                search_req["language"]
+                search_req["language"],
+                worker_id
             )
-            results[MethodEnum.CCALIGNER.value] = os.path.join(results_folder, MethodEnum.CCALIGNER.value)
+            return MethodEnum.CCALIGNER.value, os.path.join(results_folder, MethodEnum.CCALIGNER.value)
+
         elif name.upper() == MethodEnum.CCSTOKENER.value.upper():
             run_ccstokener(
                 dataset_folder,
                 params,
                 results_folder,
-                search_req["language"]
+                search_req["language"],
+                worker_id
             )
-            results[MethodEnum.CCSTOKENER.value] = os.path.join(results_folder, MethodEnum.CCSTOKENER.value)
+            return MethodEnum.CCSTOKENER.value, os.path.join(results_folder, MethodEnum.CCSTOKENER.value)
+
         else:
-            continue
+            raise ValueError(f"Unsupported method: {name}")
+
+    results = {}
+    methods_list = search_req["methods"]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_parallel_methods) as executor:
+        future_to_method = {
+            executor.submit(run_method, method): method
+            for method in methods_list
+        }
+        for future in concurrent.futures.as_completed(future_to_method):
+            method_dict = future_to_method[future]
+            try:
+                method_name, method_output_dir = future.result()
+                results[method_name] = method_output_dir
+                print(f"DEBUG: Method {method_name} finished, output at {method_output_dir}")
+            except Exception as exc:
+                raise
 
     result_path = combine_results(
         results,
@@ -306,6 +333,7 @@ def process_search_task(task_id: str, tasks: dict):
 
     return result_path, metrics, expiry_time
 
+
 @router.get("/search/{task_id}/status", response_model=StatusResponse)
 async def get_task_status(
     task_id: str,
@@ -319,6 +347,7 @@ async def get_task_status(
         "started_at": task["started_at"] if task["started_at"] else "not_started",
         "processed_snippet": task["search_req"]["snippet"]
     }
+
 
 @router.get("/search/{task_id}/results", response_model=ResultsResponse)
 async def get_task_results(
@@ -373,6 +402,7 @@ async def get_task_results(
             status_code=500,
             detail=f"Error reading results: {str(e)}"
         )
+
 
 @router.get("/methods", response_model=MethodsResponse)
 async def get_available_methods():
