@@ -2,5 +2,4 @@ __pycache__
 datasets/
 results/
 docker-compose.yml
-Dockerfile
 entrypoint.sh

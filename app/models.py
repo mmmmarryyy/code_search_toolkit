@@ -13,6 +13,8 @@ class MethodEnum(str, Enum):
     NIL_FORK = "NIL-fork"
     CCALIGNER = "CCAligner"
     CCSTOKENER = "CCSTokener"
+    CCALIGNER_FORK = "CCAligner-fork"
+    CCSTOKENER_FORK = "CCSTokener-fork"
 
 class TaskStatus(str, Enum):
     PENDING = "pending"

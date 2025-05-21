@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     TOOLS_DIR = os.path.join(os.getcwd(), "tools")
 
-    methods = ["CCAligner", "CCStokener", "NIL_fork"]
+    methods = ["CCAligner", "CCStokener", "NIL_fork", "CCAligner_fork", "CCStokener_fork"]
 
     for worker_id in range(1, args.num_workers + 1):
         print(f"INFO: Building Docker images для worker_id = {worker_id} ...")

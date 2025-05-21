@@ -19,6 +19,8 @@ from app.detection import (
     run_nil_fork,
     run_ccaligner,
     run_ccstokener,
+    run_ccaligner_fork,
+    run_ccstokener_fork,
 )
 from app.combination import combine_results
 import concurrent.futures
@@ -32,6 +34,8 @@ ALLOWED_LANGUAGES_FOR_METHOD = {
     MethodEnum.NIL_FORK: [LanguageEnum.JAVA, LanguageEnum.CPP, LanguageEnum.PYTHON],
     MethodEnum.CCALIGNER: [LanguageEnum.JAVA, LanguageEnum.C, LanguageEnum.CSHARP],
     MethodEnum.CCSTOKENER: [LanguageEnum.JAVA, LanguageEnum.C],
+    MethodEnum.CCALIGNER_FORK: [LanguageEnum.JAVA, LanguageEnum.PYTHON],
+    MethodEnum.CCSTOKENER_FORK: [LanguageEnum.JAVA],
 }
 
 EXT_MAPPING = { # TODO: check language text format for languages that are not java (i mean using them like arguments for methods)
@@ -207,6 +211,7 @@ async def create_search_task(
                 f.write('\n')
         else:
             f.write(snippet)
+        f.write('\n')
 
     task_data = {
         "status": TaskStatus.PENDING.value,
@@ -286,6 +291,28 @@ def process_search_task(
                 worker_id
             )
             return MethodEnum.CCSTOKENER.value, os.path.join(results_folder, MethodEnum.CCSTOKENER.value)
+
+        elif name.upper() == MethodEnum.CCALIGNER_FORK.value.upper():
+            run_ccaligner_fork(
+                dataset_folder,
+                params,
+                search_req["snippet_path"],
+                results_folder,
+                search_req["language"],
+                worker_id
+            )
+            return MethodEnum.CCALIGNER_FORK.value, os.path.join(results_folder, MethodEnum.CCALIGNER_FORK.value)
+
+        elif name.upper() == MethodEnum.CCSTOKENER_FORK.value.upper():
+            run_ccstokener_fork(
+                dataset_folder,
+                params,
+                search_req["snippet_path"],
+                results_folder,
+                search_req["language"],
+                worker_id
+            )
+            return MethodEnum.CCSTOKENER_FORK.value, os.path.join(results_folder, MethodEnum.CCSTOKENER_FORK.value)
 
         else:
             raise ValueError(f"Unsupported method: {name}")
@@ -405,7 +432,7 @@ async def get_task_results(
 
 
 @router.get("/methods", response_model=MethodsResponse)
-async def get_available_methods():
+async def get_available_methods(): # TODO: make it actual
     available_methods = [
         {
             "name": MethodEnum.NIL_FORK.value,

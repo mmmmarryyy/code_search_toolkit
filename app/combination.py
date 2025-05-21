@@ -15,10 +15,16 @@ def combine_results(results, combination, query_file, results_folder):
         if MethodEnum.NIL_FORK.value in results:
             method_results[MethodEnum.NIL_FORK.value] = read_nil_fork_results(results[MethodEnum.NIL_FORK.value], query_file)
             print(f"DEBUG: NIL-fork results len = {len(method_results[MethodEnum.NIL_FORK.value])}")
+        if MethodEnum.CCALIGNER_FORK.value in results:
+            method_results[MethodEnum.CCALIGNER_FORK.value] = read_ccaligner_fork_results(results[MethodEnum.CCALIGNER_FORK.value], query_file)
+            print(f"DEBUG: CCALIGNER-fork results len = {len(method_results[MethodEnum.CCALIGNER_FORK.value])}")
+        if MethodEnum.CCSTOKENER_FORK.value in results:
+            method_results[MethodEnum.CCSTOKENER_FORK.value] = read_ccstokener_fork_results(results[MethodEnum.CCSTOKENER_FORK.value], query_file)
+            print(f"DEBUG: CCSTOKENER-fork results len = {len(method_results[MethodEnum.CCSTOKENER_FORK.value])}")
 
         strategy = combination.get('strategy', 'intersection_union')
         if strategy == 'intersection_union':
-            final_pairs = intersection_strategy(method_results)
+            final_pairs =  threshold_union_strategy(method_results, len(method_results))
         elif strategy == 'weighted_union':
             weights = combination.get('weights', {})
             for method in weights:
@@ -132,9 +138,65 @@ def read_nil_fork_results(result_dir, query_file):
         logging.warning(f"Error reading NIL-fork results: {str(e)}")
     return clones
 
-def intersection_strategy(results):
-    common = set.intersection(*[set(clones) for clones in results.values()])
-    return common
+
+def read_ccaligner_fork_results(result_dir, query_file):
+    begin_of_path = "/data/dataset/"
+    clones = []
+    try:
+        filepath = os.path.join(result_dir, 'result.txt')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                for line in f:
+                    parts = line.strip().split(',')
+                    if len(parts) == 6 and parts[0].startswith(begin_of_path) and parts[3].startswith(begin_of_path):
+                        left_path = parts[0][len(begin_of_path):]
+                        right_path = parts[3][len(begin_of_path):]
+                        if left_path != query_file and right_path != query_file:
+                            continue
+                        if left_path == query_file:
+                            clones.append((
+                                (left_path, int(parts[1]), int(parts[2])),
+                                (right_path, int(parts[4]), int(parts[5]))
+                            ))
+                        else:
+                            clones.append((
+                                (right_path, int(parts[4]), int(parts[5])),
+                                (left_path, int(parts[1]), int(parts[2]))
+                            ))
+    except Exception as e:
+        logging.warning(f"Error reading CCAligner-fork results: {str(e)}")
+    return clones
+
+
+def read_ccstokener_fork_results(result_dir, query_file):
+    begin_of_path = "/data/dataset/"
+    clones = []
+    try:
+        # TODO: now output, some other file
+        filepath = os.path.join(result_dir, 'result.txt')
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                for line in f:
+                    parts = line.strip().split(',')
+                    if len(parts) == 6 and parts[0].startswith(begin_of_path) and parts[3].startswith(begin_of_path):
+                        left_path = parts[0][len(begin_of_path):]
+                        right_path = parts[3][len(begin_of_path):]
+                        if left_path != query_file and right_path != query_file:
+                            continue
+                        if left_path == query_file:
+                            clones.append((
+                                (left_path, int(parts[1]), int(parts[2])),
+                                (right_path, int(parts[4]), int(parts[5]))
+                            ))
+                        else:
+                            clones.append((
+                                (right_path, int(parts[4]), int(parts[5])),
+                                (left_path, int(parts[1]), int(parts[2]))
+                            ))
+    except Exception as e:
+        logging.warning(f"Error reading CCAligner-fork results: {str(e)}")
+    return clones
+
 
 def weighted_union_strategy(results, weights, threshold):
     scores = defaultdict(float)
