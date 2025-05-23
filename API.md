@@ -53,7 +53,7 @@
 {
   "strategy": "weighted_union",
   "weights": {
-    "NIL": 0.6,
+    "NIL-fork": 0.6,
     "CCAligner": 0.3,
     "CCSTokener": 0.1
   },
@@ -80,7 +80,7 @@ curl -X POST "http://api.example.com/api/search" \
   -F "repository=https://github.com/user/repo" \
   -F "branch=main" \
   -F "snippet=def calculate(a, b):\n    return a + b" \
-  -F 'methods=[{"name":"NIL","params":{"threshold":0.75}}]' \
+  -F 'methods=[{"name":"NIL-fork","params":{"threshold":0.75}}]' \
   -F 'combination={"strategy":"threshold_union","min_methods":2}' \
   -F "language=python"
 ```
@@ -106,7 +106,7 @@ curl -X POST "http://api.example.com/api/search" \
   -H "Content-Type: multipart/form-data" \
   -F "mode=local" \
   -F "snippet=def calculate(a, b):\n    return a + b" \
-  -F 'methods=[{"name":"NIL","params":{"threshold":0.75}}]' \
+  -F 'methods=[{"name":"NIL-fork","params":{"threshold":0.75}}]' \
   -F 'combination={"strategy":"union"}' \
   -F "language=python" \
   -F "file=@path/to/project.zip"
@@ -193,7 +193,7 @@ Content-Type: application/json
 {
   "available_methods": [
     {
-      "name": "NIL",
+      "name": "NIL-fork",
       "description": "Large-variance clone detection",
       "params": {
         "threshold": {

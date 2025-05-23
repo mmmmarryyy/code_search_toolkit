@@ -21,6 +21,8 @@ from app.detection import (
     run_ccstokener,
     run_ccaligner_fork,
     run_ccstokener_fork,
+    run_nicad,
+    run_sourcerercc
 )
 from app.combination import combine_results
 import concurrent.futures
@@ -36,6 +38,8 @@ ALLOWED_LANGUAGES_FOR_METHOD = {
     MethodEnum.CCSTOKENER: [LanguageEnum.JAVA, LanguageEnum.C],
     MethodEnum.CCALIGNER_FORK: [LanguageEnum.JAVA, LanguageEnum.PYTHON],
     MethodEnum.CCSTOKENER_FORK: [LanguageEnum.JAVA],
+    MethodEnum.NICAD: [LanguageEnum.JAVA],
+    MethodEnum.SOURCERERCC: [LanguageEnum.JAVA],
 }
 
 EXT_MAPPING = { # TODO: check language text format for languages that are not java (i mean using them like arguments for methods)
@@ -313,6 +317,26 @@ def process_search_task(
                 worker_id
             )
             return MethodEnum.CCSTOKENER_FORK.value, os.path.join(results_folder, MethodEnum.CCSTOKENER_FORK.value)
+
+        elif name.upper() == MethodEnum.NICAD.value.upper():
+            run_nicad(
+                dataset_folder,
+                params,
+                results_folder,
+                search_req["language"],
+                worker_id
+            )
+            return MethodEnum.NICAD.value, os.path.join(results_folder, MethodEnum.NICAD.value)
+
+        elif name.upper() == MethodEnum.SOURCERERCC.value.upper():
+            run_sourcerercc(
+                dataset_folder,
+                params,
+                results_folder,
+                search_req["language"],
+                worker_id
+            )
+            return MethodEnum.SOURCERERCC.value, os.path.join(results_folder, MethodEnum.SOURCERERCC.value)
 
         else:
             raise ValueError(f"Unsupported method: {name}")

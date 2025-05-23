@@ -5,7 +5,6 @@ RUN apt-get update && apt-get install -y git python3-pip
 RUN python3 -m pip install setuptools==45.2.0
 RUN python3 -m pip install tree-sitter==0.20.1
 RUN python3 -m pip install mmh3==5.0.1
-RUN python3 -m pip install gdown==5.2.0
 
 WORKDIR /app
 

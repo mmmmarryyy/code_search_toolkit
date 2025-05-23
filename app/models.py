@@ -15,6 +15,8 @@ class MethodEnum(str, Enum):
     CCSTOKENER = "CCSTokener"
     CCALIGNER_FORK = "CCAligner-fork"
     CCSTOKENER_FORK = "CCSTokener-fork"
+    NICAD = "NiCad"
+    SOURCERERCC = "SourcererCC"
 
 class TaskStatus(str, Enum):
     PENDING = "pending"
