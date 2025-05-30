@@ -2,7 +2,7 @@ import os
 import json
 import zipfile
 import datetime
-from typing import Optional
+from typing import Optional, Dict
 from fastapi import APIRouter, HTTPException, Request, Depends, Form, UploadFile, File
 
 from app.models import (
@@ -13,6 +13,7 @@ from app.models import (
     LanguageEnum,
     MethodEnum,
     TaskStatus,
+    METHODS_METADATA
 )
 from app.utils import clone_repository, generate_task_id
 from app.detection import (
@@ -100,6 +101,30 @@ async def create_search_task(
                 status_code=400,
                 detail=f"Method {method_enum.value} does not support language {lang_enum.value}"
             )
+
+    for m in methods_list:
+        name = m.get('name')
+        params_meta = METHODS_METADATA.get(MethodEnum(name), {}).get('params', {})
+        user_params = m.get('params', {}) or {}
+        validated = {}
+        for param_name, meta in params_meta.items():
+            if param_name in user_params:
+                val = user_params[param_name]
+            else:
+                val = meta["default"]
+
+            expected_type = int if meta['type'] == 'int' else float
+            try:
+                val = expected_type(val)
+            except (TypeError, ValueError):
+                raise HTTPException(400, detail=f"Param '{param_name}' for method '{name}' must be {meta['type']}")
+
+            if 'min' in meta and val < meta['min']:
+                raise HTTPException(400, detail=f"Param '{param_name}' for method '{name}' must be >= {meta['min']}")
+            if 'max' in meta and val > meta['max']:
+                raise HTTPException(400, detail=f"Param '{param_name}' for method '{name}' must be <= {meta['max']}")
+            validated[param_name] = val
+        m['params'] = validated
 
     try:
         combination_dict = json.loads(combination)
@@ -248,7 +273,8 @@ def process_search_task(
     task_id: str,
     tasks: dict,
     worker_id: int,
-    max_parallel_methods: int
+    max_parallel_methods: int,
+    save_logs: bool
 ):
     import datetime
     print(f"DEBUG: inside process_search_task, task_id = {task_id}, worker_id = {worker_id}")
@@ -272,7 +298,8 @@ def process_search_task(
                 search_req["snippet_path"],
                 results_folder,
                 search_req["language"],
-                worker_id
+                worker_id,
+                save_logs
             )
             return MethodEnum.NIL_FORK.value, os.path.join(results_folder, MethodEnum.NIL_FORK.value)
 
@@ -282,7 +309,8 @@ def process_search_task(
                 params,
                 results_folder,
                 search_req["language"],
-                worker_id
+                worker_id,
+                save_logs
             )
             return MethodEnum.CCALIGNER.value, os.path.join(results_folder, MethodEnum.CCALIGNER.value)
 
@@ -292,7 +320,8 @@ def process_search_task(
                 params,
                 results_folder,
                 search_req["language"],
-                worker_id
+                worker_id,
+                save_logs
             )
             return MethodEnum.CCSTOKENER.value, os.path.join(results_folder, MethodEnum.CCSTOKENER.value)
 
@@ -303,7 +332,8 @@ def process_search_task(
                 search_req["snippet_path"],
                 results_folder,
                 search_req["language"],
-                worker_id
+                worker_id,
+                save_logs
             )
             return MethodEnum.CCALIGNER_FORK.value, os.path.join(results_folder, MethodEnum.CCALIGNER_FORK.value)
 
@@ -314,7 +344,8 @@ def process_search_task(
                 search_req["snippet_path"],
                 results_folder,
                 search_req["language"],
-                worker_id
+                worker_id,
+                save_logs
             )
             return MethodEnum.CCSTOKENER_FORK.value, os.path.join(results_folder, MethodEnum.CCSTOKENER_FORK.value)
 
@@ -324,7 +355,8 @@ def process_search_task(
                 params,
                 results_folder,
                 search_req["language"],
-                worker_id
+                worker_id,
+                save_logs
             )
             return MethodEnum.NICAD.value, os.path.join(results_folder, MethodEnum.NICAD.value)
 
@@ -334,7 +366,8 @@ def process_search_task(
                 params,
                 results_folder,
                 search_req["language"],
-                worker_id
+                worker_id,
+                save_logs
             )
             return MethodEnum.SOURCERERCC.value, os.path.join(results_folder, MethodEnum.SOURCERERCC.value)
 
@@ -350,7 +383,6 @@ def process_search_task(
             for method in methods_list
         }
         for future in concurrent.futures.as_completed(future_to_method):
-            method_dict = future_to_method[future]
             try:
                 method_name, method_output_dir = future.result()
                 results[method_name] = method_output_dir
@@ -358,6 +390,7 @@ def process_search_task(
             except Exception as exc:
                 raise
 
+    print(f"DEBUG: before combine results")
     result_path = combine_results(
         results,
         search_req.get("combination", {"strategy": "intersection_union"}),
@@ -456,41 +489,22 @@ async def get_task_results(
 
 
 @router.get("/methods", response_model=MethodsResponse)
-async def get_available_methods(): # TODO: make it actual
+async def get_available_methods():
     available_methods = [
-        {
-            "name": MethodEnum.NIL_FORK.value,
-            "description": "Large-variance clone detection",
-            "params": {
-                "threshold": {
-                    "type": "float",
-                    "default": 0.7,
-                    "min": 0.1,
-                    "max": 1.0
-                }
-            }
-        },
-        {
-            "name": MethodEnum.CCALIGNER.value,
-            "description": "Token-based clone detection",
-            "params": {
-                "min_tokens": {
-                    "type": "integer",
-                    "default": 50,
-                    "min": 10,
-                    "max": 1000
-                }
-            }
-        },
-        {
-            "name": MethodEnum.CCSTOKENER.value,
-            "description": "Semantic token-based clone detection",
-            "params": {
-                "some_param": {
-                    "type": "string",
-                    "default": "value"
-                }
-            }
-        }
+        dict(
+            name=name,
+            description=data["description"],
+            params=[
+                dict(
+                    name=param_name,
+                    type=meta["type"],
+                    default=meta["default"],
+                    min=meta.get("min"),
+                    max=meta.get("max"),
+                )
+                for param_name, meta in data.get("params", {}).items()
+            ],
+        )
+        for name, data in METHODS_METADATA.items()
     ]
     return MethodsResponse(available_methods=available_methods)

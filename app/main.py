@@ -58,6 +58,11 @@ if __name__ == "__main__":
         default=1,
         help="Сколько worker-процессов запустить для обработки задач (default: 1)"
     )
+    parser.add_argument(
+        "--save_logs", 
+        action='store_true', 
+        help="Сохранять логи работы методов для каждой задачи"
+    )
 
     args = parser.parse_args()
 
@@ -100,6 +105,7 @@ if __name__ == "__main__":
                     args.retry_multiplier,
                     args.max_retries,
                     args.max_parallel_methods,
+                    args.save_logs,
                     worker_id
                 )
             )

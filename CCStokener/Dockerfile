@@ -21,5 +21,6 @@ RUN mkdir /data/input
 # Передаем параметры через ENV
 ENV DATASET_PATH="/data/input" 
 ENV LANGUAGE="java"
+ENV SIMILARITY_THRESHOLD=0.6
 
-CMD python runner.py -i $DATASET_PATH -m common -l $LANGUAGE
+CMD python runner.py -i $DATASET_PATH -m common -l $LANGUAGE -t $SIMILARITY_THRESHOLD

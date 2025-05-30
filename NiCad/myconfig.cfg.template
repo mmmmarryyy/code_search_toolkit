@@ -1,0 +1,10 @@
+threshold=${THRESHOLD}
+minsize=${MIN_SIZE}
+maxsize=${MAX_SIZE}
+transform=none
+rename=blind
+filter=none
+abstract=literal
+normalize=none
+cluster=no
+report=yes

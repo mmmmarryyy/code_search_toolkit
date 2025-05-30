@@ -29,5 +29,5 @@ echo "Processing dataset: $DATASET_PATH"
 ./extract ./txl "$LANGUAGE" functions "$DATASET_PATH" ./input 8 > /dev/null
 ./parser ./input ./ 5 > /dev/null
 ./tokenize ./function.file ./token ./ 8 > /dev/null
-./detect ./token ./output ./function.file 6 1 0.6 > /dev/null
+./detect ./token ./output ./function.file $WINDOW_SIZE $EDIT_DISTANCE $SIMILARITY_THRESHOLD > /dev/null
 ./co1 ./output ./ > /dev/null

@@ -11,12 +11,14 @@ def worker(
     retry_multiplier: int,
     max_retries: int,
     max_parallel_methods: int,
+    save_logs: bool,
     worker_id: int
 ):
     print("INFO: worker started, retry_k =", retry_k,
           "retry_multiplier =", retry_multiplier,
           "max_retries =", max_retries,
           "max_parallel_methods =", max_parallel_methods,
+          "save_logs =", save_logs,
           "worker_id =", worker_id)
 
     while True:
@@ -67,7 +69,7 @@ def worker(
         tasks[task_id] = task
 
         try:
-            result_path, metrics, expiry_time = process_search_task(task_id, tasks, worker_id, max_parallel_methods)
+            result_path, metrics, expiry_time = process_search_task(task_id, tasks, worker_id, max_parallel_methods, save_logs)
             task = tasks[task_id]
             task["status"] = TaskStatus.COMPLETED.value
             task["result"] = {"result_path": result_path, "metrics": metrics}

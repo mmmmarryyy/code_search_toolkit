@@ -34,7 +34,14 @@ docker run -it \
   "$IMAGE_NAME"
 
 docker wait "$CONTAINER_NAME"
-docker cp "$CONTAINER_NAME":/app/CCAligner-fork/results/. "$OUTPUT_DIR"
+docker logs "$CONTAINER_NAME"
+
+if docker cp "$CONTAINER_NAME":/app/CCAligner-fork/results/. "$OUTPUT_DIR" 2>/dev/null; then
+  echo "Results copied to: $OUTPUT_DIR"
+else
+  echo "Error: No results directory to copy"
+fi
+
 docker rm -f "$CONTAINER_NAME"
 
 echo "Results saved to: $OUTPUT_DIR"

@@ -24,9 +24,19 @@ docker run -d -it --quiet \
   "$IMAGE_NAME"
 
 docker wait "$CONTAINER_NAME"  >/dev/null
+docker logs "$CONTAINER_NAME"
 
-docker cp "$CONTAINER_NAME":/app/SourcererCC/clone-detector/output/. "$OUTPUT_DIR"  >/dev/null
-docker cp "$CONTAINER_NAME":/app/SourcererCC/tokenizers/block-level/file_block_stats/. "$OUTPUT_DIR"
+if docker cp "$CONTAINER_NAME":/app/SourcererCC/clone-detector/output/. "$OUTPUT_DIR" 2>/dev/null; then
+  echo "Results copied to: $OUTPUT_DIR"
+else
+  echo "Error: No results directory to copy"
+fi
+
+if docker cp "$CONTAINER_NAME":/app/SourcererCC/tokenizers/block-level/file_block_stats/. "$OUTPUT_DIR" 2>/dev/null; then
+  echo "Statistics copied to: $OUTPUT_DIR"
+else
+  echo "Error: No statistics directory to copy"
+fi
 
 docker rm -f "$CONTAINER_NAME" >/dev/null
 
