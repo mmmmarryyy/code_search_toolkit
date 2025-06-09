@@ -4,6 +4,10 @@ REST-сервис для точечного поиска фрагментов п
 - CCSTokener
 - NIL-fork
 - CCAligner
+- CCSTokener-fork
+- CCAligner-fork
+- NiCad
+- SourcererCC
 
 ## Описание
 
@@ -26,7 +30,7 @@ pip install -r requirements.txt
 2. Соберите контейнеры для методов, которые вы хотите использовать, см. ниже.
 3. Запустите сервер:
 ```
-python3 -m app.main [--host <адрес>] [--port <номер>] [--retry_k <минуты>] [--retry_multiplier <множитель>] [--max_retries <число>] [--max_parallel_methods <число>] [--num_workers <число>]
+python3 -m app.main [--host <адрес>] [--port <номер>] [--retry_k <минуты>] [--retry_multiplier <множитель>] [--max_retries <число>] [--max_parallel_methods <число>] [--num_workers <число>] [--save_logs]
 ```
 - `--host` — адрес хоста (по умолчанию 0.0.0.0)
 - `--port` — порт (по умолчанию 1234)
@@ -35,24 +39,11 @@ python3 -m app.main [--host <адрес>] [--port <номер>] [--retry_k <ми
 - `--max_retries` — максимальное число попыток (по умолчанию 5)
 - `--max_parallel_methods` - cколько методов (Docker-контейнеров) запускаем одновременно
 - `--num_workers` - cколько worker-процессов запустить для обработки задач
+- `--save_logs` - указывает, нужно ли сохранять логи работы методов для каждой задачи
 
 Пример запуска с нестандартными значениями:
 
 ```
 python3 -m app.main --host 0.0.0.0 --port 1234 --retry_k 5 --retry_multiplier 3 --max_retries 7
 ```
-
-## Сборка Docker-контейнеров
-
-В проекте лежат Dockerfile для CCAligner и CCSTokener, а также bash‑скрипты для их сборки и запуска. Скрипты, собирающие docker-ы необходимо запустить перед запуском сервиса:
-- **CCAligner:**  
-  - Сборка: `tools/build_CCAligner.sh`
-  
-- **CCSTokener:**  
-  - Сборка: `tools/build_CCSTokener.sh`
-
-- **NIL-fork:**  
-  - Сборка: `tools/build_NIL_fork.sh`
-
-После успешной сборки контейнеров сервис сможет запускать каждую из этих утилит внутри соответствующего Docker-контейнера
 
